@@ -1,2 +1,3 @@
 class FollowerManager:
-    def __init__()
+    def __init__(self):
+        return
