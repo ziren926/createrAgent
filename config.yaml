@@ -1,0 +1,20 @@
+openai_api_key: "xxx"
+cookies: ["xxx"]
+
+
+app:
+  title: "社交媒体管理工具"
+  window_size:
+    width: 500
+    height: 400
+  theme: "dark"
+
+follower_manager:
+  max_followers: 5000
+  tag_blacklist:
+    - "spam"
+    - "inactive"
+
+search_keyword: ['萝卜快跑被叫停了是真的嘛']
+
+filter_keywords: ["搞笑", "有趣", "趣味", "爆笑"]
