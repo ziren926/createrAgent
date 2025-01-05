@@ -5,8 +5,8 @@ import os
 # 设置 OpenAI API key
 
 class ContentGenerator:
-    def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    def __init__(self,api_key):
+        self.client = OpenAI(api_key=api_key)
     def generate_response(self,note_info: Dict) -> str:
         """
         根据笔记内容生成回复
