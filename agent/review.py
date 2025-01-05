@@ -7,10 +7,13 @@ import threading
 import queue
 import logging
 
-class PostBrowsing:
-    def __init__(self):
-        self.base_url = "https://www.xiaohongshu.com"
-        logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+class PostBrowsing(threading.Thread):
+    def __init__(self, post_queue, stop_signal,xhs_client,search_keywords):
+        super().__init__()
+        self.post_queue = post_queue
+        self.stop_signal = stop_signal
+        self.xhs_client= xhs_client
+        self.search_keywords=search_keywords
 
     def download_items(self, items, keyword, searchlist, post_queue: queue.Queue, stop_signal: threading.Event):
         """下载并处理项目信息"""
@@ -90,65 +93,61 @@ class PostBrowsing:
         except Exception as e:
             logging.error(f"Error saving data to CSV: {e}")
 
-    def process_search_keywords(self, xhs_client, search_keywords, post_queue: queue.Queue, stop_signal: threading.Event):
+    def run(self):
         """处理搜索关键词列表"""
-        self.xhs_client = xhs_client
         processed_keywords = set()  # 用于跟踪已处理的关键词，防止重复处理
-        while search_keywords:
-            if stop_signal.is_set():
-                logging.info("Stop signal received. Exiting process_search_keywords.")
-                break
+        while self.search_keywords and not self.stop_signal.is_set():
 
-            keyword = search_keywords.pop(0)  # 移除并获取第一个关键词
+            keyword = self.search_keywords.pop(0)  # 移除并获取第一个关键词
             if keyword in processed_keywords:
                 logging.info(f"Keyword '{keyword}' has already been processed. Skipping.")
                 continue
 
-            self.fetch_notes(keyword=keyword, page_size=20, page=1, searchlist=search_keywords, post_queue=post_queue, stop_signal=stop_signal)
+            self.fetch_notes(keyword=keyword, page_size=20, page=1, searchlist=self.search_keywords, post_queue=self.post_queue, stop_signal=self.stop_signal)
             processed_keywords.add(keyword)  # 标记为已处理
             time.sleep(random.uniform(1, 3))  # 在每次搜索之间等待随机时间，以降低被封禁的风险
 
-    def filter_posts(self, xhs_client, post_queue, interesting_queue, stop_signal, min_likes=100, keywords=None):
-        """从队列中筛选有趣的帖子"""
-        self.xhs_client = xhs_client
-        if keywords is None:
-            keywords = ["搞笑", "有趣", "趣味", "爆笑"]
-
-        while not stop_signal.is_set() or not post_queue.empty():
-            try:
-                post = post_queue.get(timeout=1)
-
-                if self.convert_to_int(post.get('Liked Count', '0')) >= min_likes:
-                    interesting_queue.put(post)
-                else:
-                    for keyword in keywords:
-                        if keyword in post['Title'] or keyword in post['Description']:
-                            interesting_queue.put(post)
-                            break
-                queue_size = interesting_queue.qsize()
-                print(f"There are {queue_size} interesting posts in the queue.")
-            except queue.Empty:
-                continue
-        stop_signal.set()
-
-    def convert_to_int(self,liked_count_str: str) -> int:
-        if '万' in liked_count_str:
-            # 去掉万字并转换为数字，假设万是10,000
-            num_str = liked_count_str.replace('万', '')
-            try:
-                return int(float(num_str) * 10000)
-            except ValueError:
-                return 0  # 如果转换失败，返回0
-        elif 'K' in liked_count_str:
-            # 去掉K字并转换为数字，假设K是1,000
-            num_str = liked_count_str.replace('K', '')
-            try:
-                return int(float(num_str) * 1000)
-            except ValueError:
-                return 0  # 如果转换失败，返回0
-        else:
-            # 如果没有单位，直接转换为数字
-            try:
-                return int(liked_count_str)
-            except ValueError:
-                return 0  # 如果转换失败，返回0
+    # def filter_posts(self, xhs_client, post_queue, interesting_queue, stop_signal, min_likes=100, keywords=None):
+    #     """从队列中筛选有趣的帖子"""
+    #     self.xhs_client = xhs_client
+    #     if keywords is None:
+    #         keywords = ["搞笑", "有趣", "趣味", "爆笑"]
+    #
+    #     while not stop_signal.is_set() or not post_queue.empty():
+    #         try:
+    #             post = post_queue.get(timeout=1)
+    #
+    #             if self.convert_to_int(post.get('Liked Count', '0')) >= min_likes:
+    #                 interesting_queue.put(post)
+    #             else:
+    #                 for keyword in keywords:
+    #                     if keyword in post['Title'] or keyword in post['Description']:
+    #                         interesting_queue.put(post)
+    #                         break
+    #             queue_size = interesting_queue.qsize()
+    #             print(f"There are {queue_size} interesting posts in the queue.")
+    #         except queue.Empty:
+    #             continue
+    #     stop_signal.set()
+    #
+    # def convert_to_int(self,liked_count_str: str) -> int:
+    #     if '万' in liked_count_str:
+    #         # 去掉万字并转换为数字，假设万是10,000
+    #         num_str = liked_count_str.replace('万', '')
+    #         try:
+    #             return int(float(num_str) * 10000)
+    #         except ValueError:
+    #             return 0  # 如果转换失败，返回0
+    #     elif 'K' in liked_count_str:
+    #         # 去掉K字并转换为数字，假设K是1,000
+    #         num_str = liked_count_str.replace('K', '')
+    #         try:
+    #             return int(float(num_str) * 1000)
+    #         except ValueError:
+    #             return 0  # 如果转换失败，返回0
+    #     else:
+    #         # 如果没有单位，直接转换为数字
+    #         try:
+    #             return int(liked_count_str)
+    #         except ValueError:
+    #             return 0  # 如果转换失败，返回0

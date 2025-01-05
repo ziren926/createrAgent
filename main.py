@@ -1,7 +1,9 @@
 import threading
 import queue
 from agent.review import PostBrowsing
+from agent.analyze_content import PostAnalyzer
 from agent.content_gen import ContentGenerator
+from agent.like import LikeThread
 from agent.load_yaml import load_config
 # from xhs import XhsClient
 import random
@@ -43,9 +45,7 @@ def sign(uri, data=None, a1="", web_session=""):
 def main():
     #读取配置
     config = load_config("config.yaml")
-    search_keywords = config.get("search_keyword","萝卜快跑")
-    min_likes = config.get("min_likes",1)
-    filter_keywords = config.get("filter_keywords")
+    search_keywords = config.get("search_keyword","AI AGENT")
     cookie = config.get("cookies")
     openai_api_key=config.get("openai_api_key")
 
@@ -60,36 +60,39 @@ def main():
 
     # 初始化队列和信号
     post_queue = queue.Queue()  # 存储所有浏览到的帖子
-    interesting_queue = queue.Queue()  # 存储筛选出的有趣帖子
+    action_queues = {
+        "reply": queue.Queue(),
+        "like": queue.Queue(),
+        "favorite": queue.Queue(),
+        # 可以根据需要添加更多队列
+    }
     stop_signal = threading.Event()  # 用于控制筛选线程的停止信号
 
 
     # 定义浏览线程
-    browse_thread = threading.Thread(
-        target=PostBrowsing().process_search_keywords,
-        args=(xhs_client,search_keywords,post_queue, stop_signal),
-        name="BrowseThread"
-    )
+    browse_thread = PostBrowsing(post_queue, stop_signal,xhs_client,search_keywords)
 
     # 定义筛选线程
-    filter_thread = threading.Thread(
-        target=PostBrowsing().filter_posts,
-        args=(xhs_client,post_queue, interesting_queue, stop_signal, min_likes, filter_keywords),
-        name="FilterThread"
-    )
+    analyzer_thread = PostAnalyzer(post_queue, action_queues, stop_signal,openai_api_key)
+
+    # 定义回复线程
+    reply_thread = ReplyThread(action_queues["reply"], xhs_client, stop_signal)
+
+    # 定义喜欢线程
+    like_thread = LikeThread(action_queues["like"], xhs_client, stop_signal)
 
 
     # 启动线程
     browse_thread.start()
-    filter_thread.start()
-
-    reply_thread = ReplyThread(interesting_queue, xhs_client, content_gen, stop_signal)
+    analyzer_thread.start()
     reply_thread.start()
+    like_thread.start()
 
     # 等待线程完成
     browse_thread.join()
-    filter_thread.join()
+    analyzer_thread.join()
     reply_thread.join()
+    like_thread.join()
 
 
     print("所有任务已完成！")
